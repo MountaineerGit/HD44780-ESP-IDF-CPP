@@ -64,29 +64,25 @@ static void LCD_pulseEnable(uint8_t nibble);
 static esp_err_t I2C_init(void)
 {
     i2c_config_t conf = {
-        /*
         .mode = I2C_MODE_MASTER,
         .sda_io_num = SDA_pin,
         .scl_io_num = SCL_pin,
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000 */
-        I2C_MODE_MASTER,
-         SDA_pin,
-         SCL_pin,
-         GPIO_PULLUP_ENABLE,
-        GPIO_PULLUP_ENABLE,
-         100000
+        .master = {.clk_speed = 100000 },
+        .clk_flags = 0
+
 
     };
 	i2c_param_config(I2C_NUM_0, &conf);
 	i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
     return ESP_OK;
 }
-/*Constructor*/
-    LCD_I2C::LCD_I2C(){
 
-}
+/*Constructor*/
+LCD_I2C::LCD_I2C()
+{ }
+
 void LCD_I2C::init(uint8_t addr, uint8_t dataPin, uint8_t clockPin, uint8_t cols, uint8_t rows)
 {
     LCD_addr = addr;
@@ -95,16 +91,16 @@ void LCD_I2C::init(uint8_t addr, uint8_t dataPin, uint8_t clockPin, uint8_t cols
     LCD_cols = cols;
     LCD_rows = rows;
     I2C_init();
-    vTaskDelay(100 / portTICK_RATE_MS);                                 // Initial 40 mSec delay
+    vTaskDelay(100 / portTICK_PERIOD_MS);                                 // Initial 100 mSec delay
 
     // Reset the LCD controller
     LCD_writeNibble(LCD_FUNCTION_RESET, LCD_COMMAND);                   // First part of reset sequence
-    vTaskDelay(10 / portTICK_RATE_MS);                                  // 4.1 mS delay (min)
+    vTaskDelay(100 / portTICK_PERIOD_MS);                                  // 4.1 mS delay (min)
     LCD_writeNibble(LCD_FUNCTION_RESET, LCD_COMMAND);                   // second part of reset sequence
-    ets_delay_us(200);                                                  // 100 uS delay (min)
+    ets_delay_us(2000);                                                  // 200 uS delay (min)
     LCD_writeNibble(LCD_FUNCTION_RESET, LCD_COMMAND);                   // Third time's a charm
     LCD_writeNibble(LCD_FUNCTION_SET_4BIT, LCD_COMMAND);                // Activate 4-bit mode
-    ets_delay_us(80);                                                   // 40 uS delay (min)
+    ets_delay_us(800);                                                   // 80 uS delay (min)
 
     // --- Busy flag now available ---
     // Function Set instruction
@@ -113,7 +109,7 @@ void LCD_I2C::init(uint8_t addr, uint8_t dataPin, uint8_t clockPin, uint8_t cols
 
     // Clear Display instruction
     LCD_writeByte(LCD_CLEAR, LCD_COMMAND);                              // clear display RAM
-    vTaskDelay(2 / portTICK_RATE_MS);                                   // Clearing memory takes a bit longer
+    vTaskDelay(20 / portTICK_PERIOD_MS);                                   // Clearing memory takes a bit longer
     
     // Entry Mode Set instruction
     LCD_writeByte(LCD_ENTRY_MODE, LCD_COMMAND);                         // Set desired shift characteristics
@@ -134,14 +130,14 @@ void LCD_I2C::setCursor(uint8_t col, uint8_t row)
     cur_col = col;
 }
 
-void LCD_I2C::writeChar(char c)
+void LCD_I2C::writeChar(const char c) const
 {
-    LCD_writeByte(c, LCD_WRITE);                                        // Write data to DDRAM
+    LCD_writeByte(c, LCD_WRITE);        // Write data to DDRAM
 }
 
 void LCD_I2C::print(std::string str) const
 {
-    for(char c : str){
+    for(const char c : str){
         writeChar(c);
     }
 
@@ -150,7 +146,7 @@ void LCD_I2C::print(int i) const
 {
     std::string str = std::to_string(i);
 
-    for(char c : str){
+    for(const char c : str){
         writeChar(c);
     }
    
@@ -165,7 +161,7 @@ void LCD_I2C::print(char c) const
 void LCD_I2C::println(std::string str)
 {
     
-    for(char c : str){
+    for(const char c : str){
         writeChar(c);
     }
     if(cur_row == 0){
@@ -175,7 +171,7 @@ void LCD_I2C::println(std::string str)
 void LCD_I2C::println(int i)
 {
     std::string str = std::to_string(i);
-    for(char c : str){
+    for(const char c : str){
         writeChar(c);
     }
     if(cur_row == 0){
@@ -194,16 +190,16 @@ void LCD_I2C::println(char c)
 void LCD_I2C::home(void)
 {
     LCD_writeByte(LCD_HOME, LCD_COMMAND);
-    vTaskDelay(2 / portTICK_RATE_MS);                                   // This command takes a while to complete
+    vTaskDelay(20 / portTICK_PERIOD_MS);                                   // This command takes a while to complete
 }
 
 void LCD_I2C::clear(void)
 {
     LCD_writeByte(LCD_CLEAR, LCD_COMMAND);
-    vTaskDelay(2 / portTICK_RATE_MS);                                   // This command takes a while to complete
+    vTaskDelay(20 / portTICK_PERIOD_MS);                                   // This command takes a while to complete
 }
 
-static void LCD_writeNibble(uint8_t nibble, uint8_t mode)
+static void LCD_writeNibble(const uint8_t nibble, const uint8_t mode)
 {
     uint8_t data = (nibble & 0xF0) | mode | LCD_BACKLIGHT;
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
@@ -217,13 +213,13 @@ static void LCD_writeNibble(uint8_t nibble, uint8_t mode)
     LCD_pulseEnable(data);                                              // Clock data into LCD
 }
 
-static void LCD_writeByte(uint8_t data, uint8_t mode)
+static void LCD_writeByte(const uint8_t data, const uint8_t mode)
 {
     LCD_writeNibble(data & 0xF0, mode);
     LCD_writeNibble((data << 4) & 0xF0, mode);
 }
 
-static void LCD_pulseEnable(uint8_t data)
+static void LCD_pulseEnable(const uint8_t data)
 {
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     ESP_ERROR_CHECK(i2c_master_start(cmd));
